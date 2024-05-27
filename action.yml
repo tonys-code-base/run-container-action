@@ -1,0 +1,66 @@
+name: 'Run Docker Container'
+description: 'Run container from an existing Docker image'
+inputs:
+  docker-registry-url:
+    description: 'Docker registry address'
+    required: true
+  image:
+    description: 'Image name'
+    required: true
+  tag:
+    description: 'Image tag'
+    required: false
+    default: latest
+  options:
+    description: 'Docker run options.
+      https://docs.docker.com/reference/cli/docker/container/run/#options'
+    required: false
+  runtime_args:
+    description: 'Docker runtime arguments'
+    required: false
+
+outputs:
+  docker_run_rc:
+    description: 'Value of return code from received from docker run'
+    value: ${{ steps.run.outputs.docker_run_rc }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Run docker pull
+      shell: bash
+      id: pull
+      env:
+        IMAGE: ${{ inputs.image }}
+        TAG: ${{ inputs.tag }}
+        DOCKER_REGISTRY_URL: ${{ inputs.docker-registry-url }}
+      run: |
+        image_uri="${DOCKER_REGISTRY_URL}/$IMAGE:$TAG"
+        echo "image_uri=${image_uri}" >> $GITHUB_OUTPUT      
+        
+        if ! docker pull "${image_uri}" -q; then
+          exit 1
+        fi
+
+    - name: Run the container
+      id: run
+      shell: bash
+      env:
+        IMAGE_URI: ${{ steps.pull.outputs.image_uri }}
+      run: |
+        set +e
+        set +o pipefail
+
+        docker run \
+          --rm \
+          ${{ inputs.options }} \          
+          -e CI=$CI \
+          -v "/var/run/docker.sock":"/var/run/docker.sock" \
+          -v "${{ runner.temp }}/_github_home":"/github/home" \
+          -v "${{ runner.temp }}/_github_workflow":"/github/workflow" \
+          -v "${{ runner.temp }}/_runner_file_commands":"/github/file_commands" \
+          -v "${{ github.workspace }}":"/github/workspace" \
+          "${IMAGE_URI}" \
+          ${{ inputs.runtime_args }}
+
+        docker_run_rc=$?
+        echo "docker_run_rc=${docker_run_rc}" >> $GITHUB_OUTPUT
