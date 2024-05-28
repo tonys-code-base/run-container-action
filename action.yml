@@ -1,4 +1,7 @@
 name: 'Run Docker Container'
+branding:
+  icon: 'box'
+  color: 'orange'
 description: 'Run container from an existing Docker image'
 inputs:
   docker-registry-url:
@@ -35,8 +38,8 @@ runs:
         DOCKER_REGISTRY_URL: ${{ inputs.docker-registry-url }}
       run: |
         image_uri="${DOCKER_REGISTRY_URL}/$IMAGE:$TAG"
-        echo "image_uri=${image_uri}" >> $GITHUB_OUTPUT      
-        
+        echo "image_uri=${image_uri}" >> $GITHUB_OUTPUT
+
         if ! docker pull "${image_uri}" -q; then
           exit 1
         fi
@@ -47,18 +50,17 @@ runs:
       env:
         IMAGE_URI: ${{ steps.pull.outputs.image_uri }}
       run: |
-        set +e
         set +o pipefail
 
         docker run \
           --rm \
-          ${{ inputs.options }} \          
           -e CI=$CI \
           -v "/var/run/docker.sock":"/var/run/docker.sock" \
           -v "${{ runner.temp }}/_github_home":"/github/home" \
           -v "${{ runner.temp }}/_github_workflow":"/github/workflow" \
           -v "${{ runner.temp }}/_runner_file_commands":"/github/file_commands" \
           -v "${{ github.workspace }}":"/github/workspace" \
+          ${{ inputs.options }} \
           "${IMAGE_URI}" \
           ${{ inputs.runtime_args }}
 

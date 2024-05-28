@@ -1,12 +1,9 @@
-# Run Docker Container Action
+# Docker Container Action
 
-Runs a Docker container.
+Basic action to pull an image run as a docker container.
 
-The action,
-
-- Pulls image from a Docker registry
-- Accepts optional `inputs` for `docker run` [options](https://docs.docker.com/reference/cli/docker/container/run/#options) and/or [runtime arguments](https://docs.docker.com/engine/reference/run/#commands-and-arguments)
-- Executes `docker run` using the inputs provided
+- Supports images sourced from Docker or ECR registry
+- Accepts `inputs` for `docker run` [`options`](https://docs.docker.com/reference/cli/docker/container/run/#options) and/or [runtime arguments](https://docs.docker.com/engine/reference/run/#commands-and-arguments)
 
 ## Inputs
 
@@ -30,9 +27,19 @@ runtime_args:
   required: false
 ```
 
-## Example 1: Pull from Private Docker Registry and Run
+## Output
 
-To run a script with name `my-script.sh`, which resides in GitHub repository root path.
+```yaml
+outputs:
+  docker_run_rc:
+    description: 'Value of return code from received from docker run'
+```
+
+## Example 1: Pull from Private *Docker Registry* and Run Container
+
+The sample workflow below:
+
+- runs script  `my-script.sh`, which resides in the root of the checkout path, i.e., `${{ github.workspace/my-script.sh }}`
 
 ```yaml
 ...
@@ -41,38 +48,41 @@ env:
   image_name: alpine
   image_tag: latest
   registry: registry:443
-  
+
 jobs:
   run-container:
     runs-on: [self-hosted]
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        ...
 
       - name: Authenticate to registry
         id: login
         uses: docker/login-action@v3
-        with:
-          docker-registry-url: ${{ env.registry }}
-          username: ${{ secrets.UNAME }}
-          password: ${{ secrets.PASSWD }}
+        ...
 
       - name: Run container
+        id: run-docker-container
         uses: tonys-code-base/run-container-action@v1.0.0
         with:
-          docker-registry-url: registry:443
-          image: alpine
-          tag: latest
+          docker-registry-url: ${{ env.registry }}
+          image: ${{ env.image_name }}
+          tag: ${{ env.image_tag }}
           options: >-
-            -v ${{ github.workspace }}:/myapp/path
+            -v "${{ github.workspace }}":"/myapp/path"
             -e MYENV_VAR=sample-value
           runtime_args: >-
-            /myapp/path/my-script.sh
+            sh -c "/myapp/path/my-script.sh"
+
+      - name: Get return code of docker run
+        id: docker-return-code
+        run: |
+          echo ${{ steps.run-docker-container.outputs.docker_run_rc }}
 ```
 
-## Example 2: Pull from AWS ECR Registry and Run
+## Example 2: Pull Image from AWS *ECR Registry* and Run Container
 
-Run the same script mentioned in previous example, but this time, the image is sourced from AWS ECR.
+Run the same script in previous example, but with an image sourced from AWS ECR.
 
 ```yaml
 ...
@@ -81,7 +91,7 @@ env:
   image_name: my-ecr-image
   image_tag: latest
   registry: 123456789012.dkr.ecr.us-east-1.amazonaws.com
-  
+
 jobs:
   run-container:
     runs-on: [self-hosted]
@@ -98,21 +108,24 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-        with:
-          mask-password: 'true'
-          ...
-          ...
+        ...
+        ...
 
       - name: Run container
+        id: run-docker-container
         uses: tonys-code-base/run-container-action@v1.0.0
         with:
           docker-registry-url: ${{ env.registry }}
           image: ${{ env.image_name }}
           tag: ${{ env.image_tag }}
           options: >-
-            -v ${{ github.workspace }}:/myapp/path
+            -v "${{ github.workspace }}":"/myapp/path"
             -e MYENV_VAR=sample-value
           runtime_args: >-
-            /myapp/path/my-script.sh
-```
+            sh -c "/myapp/path/my-script.sh"
 
+      - name: Get return code of docker run
+        id: docker-return-code
+        run: |
+          echo ${{ steps.run-docker-container.outputs.docker_run_rc }}
+```
